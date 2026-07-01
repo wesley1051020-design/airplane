@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boeing 787 艙門滑梯連動遊戲</title>
+    <style>
+        :root {
+            --bg-color: #1a202c;
+            --door-color: #e2e8f0;
+            --door-border: #cbd5e0;
+            --handle-color: #4a5568;
+            --danger: #e53e3e;
+            --success: #38a169;
+            --warning: #dd6b20;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: #a0aec0;
+            margin-bottom: 20px;
+        }
+
+        /* 飛機內艙框 */
+        .aircraft-interior {
+            width: 500px;
+            height: 720px;
+            background-color: #2d3748;
+            border-radius: 50px;
+            padding: 30px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            border: 10px solid #4a5568;
+        }
+
+        /* 門外的藍天與滑梯背景 */
+        .outside-view {
+            position: absolute;
+            width: 420px;
+            height: 640px;
+            background: linear-gradient(to bottom, #90cdf4, #f7fafc);
+            border-radius: 30px;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .outside-ready {
+            color: #2b6cb0;
+            font-weight: bold;
+            font-size: 1.2rem;
+            border: 3px dashed #2b6cb0;
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+            z-index: 2;
+        }
+
+        /* 逃生滑梯實體 */
+        .escape-slide {
+            width: 200px;
+            height: 0px;
+            background: linear-gradient(to bottom, #fff5f5, #fed7d7);
+            border: 5px solid var(--danger);
+            border-radius: 10px;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--danger);
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-align: center;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+            z-index: 3;
+        }
+
+        /* 充氣時才會加上這個 class 顯示滑梯 */
+        .escape-slide.deployed {
+            height: 320px;
+            opacity: 1;
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* 787 艙門本體 */
+        .b787-door {
+            position: absolute;
+            width: 420px;
+            height: 640px;
+            background-color: var(--door-color);
+            border-radius: 30px;
+            border: 6px solid var(--door-border);
+            z-index: 4;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: all 1.2s cubic-bezier(0.77, 0, 0.175, 1);
+            transform-origin: left center;
+        }
+
+        /* 艙門開啟動畫：向左側外滑 */
+        .b787-door.opened {
+            transform: translateX(-90%) scaleX(0.2) skewY(3deg);
+            opacity: 0.9;
+            box-shadow: 15px 0 30px rgba(0,0,0,0.5);
+        }
+        /* 如果觸發滑梯，門將永久鎖定失效 */
+        .b787-door.opened.locked {
+            pointer-events: none;
+        }
+
+        /* 觀景窗 */
+        .door-window {
+            width: 90px;
+            height: 130px;
+            background: linear-gradient(135deg, #1a365d, #2a4365);
+            border-radius: 45px;
+            border: 5px solid #a0aec0;
+            box-shadow: inset 0 5px 10px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+        }
+
+        /* 控制列 */
+        .control-row {
+            display: flex;
+            gap: 15px;
+            width: 100%;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        /* Armed/Disarmed 切換器 */
+        .mode-selector {
+            background: #cbd5e0;
+            width: 140px;
+            padding: 8px;
+            border-radius: 10px;
+            border: 2px solid #718096;
+            text-align: center;
+        }
+
+        .mode-status-light {
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: white;
+            background-color: var(--danger);
+            padding: 3px 8px;
+            border-radius: 5px;
+            display: inline-block;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .switch-btn {
+            width: 100%;
+            padding: 5px;
+            background: #4a5568;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* 紅色緊急按鈕 */
+        .emergency-box {
+            background: #cbd5e0;
+            border: 2px solid #718096;
+            border-radius: 10px;
+            padding: 8px;
+            width: 140px;
+            text-align: center;
+        }
+
+        .emergency-btn {
+            background-color: var(--danger);
+            color: white;
+            border: 3px solid #9b2c2c;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.7rem;
+            box-shadow: 0 4px 0 #9b2c2c;
+            outline: none;
+            transition: all 0.1s;
+        }
+        .emergency-btn.active {
+            background-color: #9b2c2c;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+            transform: translateY(2px);
+        }
+
+        .emergency-label {
+            font-size: 0.65rem;
+            color: var(--danger);
+            font-weight: bold;
+            margin-top: 4px;
+        }
+
+        /* 把手區域 */
+        .handle-area {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .guide-ring {
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            border: 3px dashed #a0aec0;
+            border-radius: 50%;
+        }
+
+        .handle-pivot {
+            width: 40px;
+            height: 40px;
+            background: #718096;
+            border-radius: 50%;
+            border: 4px solid #2d3748;
+            z-index: 6;
+        }
+
+        /* 大手把（初始為水平 90deg） */
+        .rotating-handle {
+            position: absolute;
+            width: 30px;
+            height: 160px;
+            background: var(--handle-color);
+            border-radius: 15px;
+            z-index: 5;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            transform: rotate(90deg); 
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+        }
+
+        .slide-pack {
+            width: 80%;
+            height: 75px;
+            background-color: #a0aec0;
+            margin-top: auto;
+            border-radius: 10px;
+            border: 3px solid #718096;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.75rem;
+            color: #4a5568;
+            font-weight: bold;
+        }
+
+        /* 下方看版 */
+        .dashboard {
+            margin-top: 20px;
+            width: 500px;
+            background: #2d3748;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #4a5568;
+            text-align: center;
+        }
+
+        .msg-box {
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--danger);
+            margin-bottom: 5px;
+        }
+
+        .hint-box {
+            font-size: 0.85rem;
+            color: #cbd5e0;
+        }
+
+        .reset-btn {
+            margin-top: 10px;
+            padding: 5px 12px;
+            background: #4a5568;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05) translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>BOEING 787 艙門與滑梯智慧連動模擬</h1>
+    <div class="subtitle">沒按緊急鈕可正常開關門（看不到滑梯） vs 充氣觸發（看得到滑梯且無法關門）</div>
+
+    <div class="aircraft-interior">
+        <div class="outside-view" onclick="clickOutsideToClose()">
+            <div class="outside-ready" id="outside-text">艙門關閉中</div>
+            <div class="escape-slide" id="slide-mesh">SLIDE INFLATED<br>🔥 充氣滑梯已展開</div>
+        </div>
+
+        <div class="b787-door" id="airplane-door">
+            <div class="door-window"></div>
+
+            <div class="control-row">
+                <div class="mode-selector">
+                    <div class="mode-status-light" id="status-light">Armed</div>
+                    <button class="switch-btn" id="mode-btn" onclick="toggleMode()">切換至 DISARMED</button>
+                </div>
+
+                <div class="emergency-box">
+                    <button class="emergency-btn" id="emer-btn" onclick="triggerEmergency()">EMER</button>
+                    <div class="emergency-label">緊急釋放鈕</div>
+                </div>
+            </div>
+
+            <div class="handle-area">
+                <div class="guide-ring"></div>
+                <div class="handle-pivot"></div>
+                <div class="rotating-handle" id="door-handle" onclick="operateHandle()"></div>
+            </div>
+
+            <div class="slide-pack">EMERGENCY ESCAPE SLIDE PACK</div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="msg-box" id="msg-display">警報：艙門處於 ARMED 狀態！</div>
+        <div class="hint-box" id="hint-display">【正常開關門】：請先切換至 DISARMED。</div>
+        <button class="reset-btn" id="reset-btn" style="display:none;" onclick="resetSimulator()">更換全新滑梯包（重置）</button>
+    </div>
+
+    <script>
+        let isArmed = true;
+        let isEmergencyPressed = false;
+        let doorState = "closed"; // closed, opening, opened, closing
+        let isSlideDeployed = false; // 是否已經充氣噴出滑梯
+
+        const airplaneDoor = document.getElementById('airplane-door');
+        const doorHandle = document.getElementById('door-handle');
+        const statusLight = document.getElementById('status-light');
+        const modeBtn = document.getElementById('mode-btn');
+        const emerBtn = document.getElementById('emer-btn');
+        const msgDisplay = document.getElementById('msg-display');
+        const hintDisplay = document.getElementById('hint-display');
+        const outsideText = document.getElementById('outside-text');
+        const slideMesh = document.getElementById('slide-mesh');
+        const resetBtn = document.getElementById('reset-btn');
+
+        doorHandle.style.transform = "rotate(90deg)";
+
+        function toggleMode() {
+            if (doorState !== "closed") return; 
+            if (isArmed) {
+                isArmed = false;
+                statusLight.innerText = "Disarmed";
+                statusLight.style.backgroundColor = "var(--success)";
+                modeBtn.innerText = "切換至 ARMED";
+                msgDisplay.innerText = "安全：已解除武裝 (DISARMED)";
+                msgDisplay.style.color = "var(--success)";
+                hintDisplay.innerText = "👉 現在點擊手把，可以正常開關門（不會觸發滑梯）。";
+            } else {
+                isArmed = true;
+                statusLight.innerText = "Armed";
+                statusLight.style.backgroundColor = "var(--danger)";
+                modeBtn.innerText = "切換至 DISARMED";
+                msgDisplay.innerText = "警報：艙門處於 ARMED 狀態！";
+                msgDisplay.style.color = "var(--danger)";
+                hintDisplay.innerText = "⚠️ 注意：此狀態下開門或按下EMER鈕，將會觸發充氣滑梯。";
+            }
+        }
+
+        function triggerEmergency() {
+            if (doorState !== "closed") return;
+            isEmergencyPressed = !isEmergencyPressed;
+            if (isEmergencyPressed) {
+                emerBtn.classList.add('active');
+                msgDisplay.innerText = "🚨 緊急開門模式已連動！";
+                msgDisplay.style.color = "var(--danger)";
+                hintDisplay.innerText = "現在轉動手把開門，將強制充氣並彈出滑梯！";
+            } else {
+                emerBtn.classList.remove('active');
+                toggleMode(); toggleMode(); // 刷回原本狀態文字
+            }
+        }
+
+        // 點擊手把開門或關門
+        function operateHandle() {
+            if (doorState === "opening" || doorState === "closing") return;
+
+            if (doorState === "closed") {
+                // --- 執行開門程序 ---
+                doorState = "opening";
+                modeBtn.disabled = true;
+                emerBtn.disabled = true;
+                
+                doorHandle.style.transform = "rotate(-90deg)"; // 轉到另一邊平的
+                msgDisplay.innerText = "解鎖中...";
+
+                setTimeout(() => {
+                    airplaneDoor.classList.add('opened'); 
+                    
+                    setTimeout(() => {
+                        doorState = "opened";
+                        
+                        // 判斷是否充氣彈出滑梯：如果按了緊急鈕，或者是在 Armed 狀態下直接開門
+                        if (isEmergencyPressed || isArmed) {
+                            isSlideDeployed = true;
+                            airplaneDoor.classList.add('locked'); // 永久鎖定門，不能再點擊
+                            slideMesh.classList.add('deployed'); // 充氣！看得到滑梯！
+                            outsideText.innerText = "🚨 EMERGENCY EXIT";
+                            msgDisplay.innerText = "🔥 充氣滑梯已彈出！無法進行關門。";
+                            msgDisplay.style.color = "var(--danger)";
+                            hintDisplay.innerText = "滑梯已成功充氣，請點擊最下方按鈕更換全新滑梯包才能重新測試。";
+                            resetBtn.style.display = "inline-block";
+                        } else {
+                            // 正常沒按緊急鈕開門：看不到滑梯
+                            outsideText.innerText = "🟢 正常開啟狀態 (無滑梯)";
+                            msgDisplay.innerText = "艙門已安全開啟（滑梯未釋放）";
+                            msgDisplay.style.color = "#4299e1";
+                            hintDisplay.innerText = "👉 沒按緊急鈕，所以看不到滑梯。點擊右側藍天背景可執行【關門程序】。";
+                        }
+                    }, 600);
+                }, 800);
+            }
+        }
+
+        // 點擊外面風景執行關門（只有在沒充氣滑梯時有用）
+        function clickOutsideToClose() {
+            if (doorState !== "opened" || isSlideDeployed) return; // 如果充氣了，直接跳出不給關門
+
+            doorState = "closing";
+            airplaneDoor.classList.remove('opened');
+            msgDisplay.innerText = "艙門正在靠攏...";
+
+            setTimeout(() => {
+                doorHandle.style.transform = "rotate(90deg)"; // 轉回原本這平的一邊
+                setTimeout(() => {
+                    doorState = "closed";
+                    modeBtn.disabled = false;
+                    emerBtn.disabled = false;
+                    outsideText.innerText = "艙門關閉中";
+                    msgDisplay.innerText = "艙門已安全關閉並鎖緊";
+                    msgDisplay.style.color = "var(--success)";
+                    hintDisplay.innerText = "您可以重新測試正常開關門，或是點擊紅鈕測試緊急充氣。";
+                }, 800);
+            }, 1200);
+        }
+
+        function resetSimulator() {
+            isSlideDeployed = false;
+            airplaneDoor.classList.remove('locked');
+            slideMesh.classList.remove('deployed');
+            resetBtn.style.display = "none";
+            isEmergencyPressed = false;
+            emerBtn.classList.remove('active');
+            clickOutsideToClose();
+            setTimeout(() => {
+                isArmed = true;
+                statusLight.innerText = "Armed";
+                statusLight.style.backgroundColor = "var(--danger)";
+                modeBtn.innerText = "切換至 DISARMED";
+                msgDisplay.innerText = "警報：艙門處於 ARMED 狀態！";
+                msgDisplay.style.color = "var(--danger)";
+            }, 2100);
+        }
+    </script>
+</body>
+</html>
